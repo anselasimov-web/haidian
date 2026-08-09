@@ -784,6 +784,33 @@ def validate_agent_disclosure(
         )
 
 
+def describe_line_ending_digest_mismatch(raw: bytes, declared_digest: str) -> str:
+    """Explain a manifest sha256 mismatch that is only a line-ending difference.
+
+    A manifest generated on a CRLF working copy records digests of CRLF bytes,
+    but git normalises the committed bytes to LF (the reverse happens when CRLF
+    files are committed verbatim). Either way every text file mismatches while
+    binary files still match, which is hard to read from the digest alone.
+    Returning a hint keeps the error actionable instead of merely factual.
+    """
+
+    lf_bytes = raw.replace(b"\r\n", b"\n")
+    crlf_bytes = lf_bytes.replace(b"\n", b"\r\n")
+    if crlf_bytes != raw and hashlib.sha256(crlf_bytes).hexdigest() == declared_digest:
+        return (
+            "; the declared digest matches this file's CRLF form. The manifest was"
+            " generated on a CRLF working copy and git normalised the committed bytes"
+            " to LF. Set core.autocrlf=false, restore the working tree, then regenerate"
+            " the manifest"
+        )
+    if lf_bytes != raw and hashlib.sha256(lf_bytes).hexdigest() == declared_digest:
+        return (
+            "; the declared digest matches this file's LF form, but the committed bytes"
+            " contain CRLF. Normalise the file to LF before regenerating the manifest"
+        )
+    return ""
+
+
 def policy_file(repo_root: Path, relative_path: str) -> Path:
     candidate = repo_root / relative_path
     if candidate.exists():
@@ -1346,9 +1373,15 @@ def validate_manifest_file(report: ValidationReport, repo_root: Path, proposal_d
                 else:
                     report.add_warning(message + " (legacy package compatibility)")
             elif declared_digest:
-                actual_digest = hashlib.sha256(listed_file.read_bytes()).hexdigest()
+                listed_bytes = listed_file.read_bytes()
+                actual_digest = hashlib.sha256(listed_bytes).hexdigest()
                 if declared_digest != actual_digest:
                     message = f"{proposal_dir}/manifest.json: sha256 mismatch for `{safe_path}`"
+                    line_ending_hint = describe_line_ending_digest_mismatch(
+                        listed_bytes, declared_digest
+                    )
+                    if line_ending_hint:
+                        message += line_ending_hint
                     if translation_entry and not strict_bilingual:
                         report.add_warning(message + "; legacy bilingual metadata does not block review")
                     else:

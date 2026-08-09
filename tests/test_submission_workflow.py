@@ -2261,6 +2261,71 @@ class SubmissionWorkflowTests(unittest.TestCase):
             self.assertIn("visual/index.en.html", "\n".join(report.errors))
             self.assertIn("iframe", "\n".join(report.errors))
 
+    def test_crlf_manifest_digest_mismatch_explains_line_endings(self) -> None:
+        """A manifest generated on a CRLF working copy should say so, not just 'mismatch'."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            base = "submissions/alice/ai-urban-loop"
+            changed = self.write_minimal_ai_package(root, base)
+            manifest_path = root / base / "manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            target = root / base / "metrics.json"
+            committed = target.read_bytes().replace(b"\r\n", b"\n")
+            target.write_bytes(committed)
+            crlf_digest = hashlib.sha256(committed.replace(b"\n", b"\r\n")).hexdigest()
+            for entry in manifest["files"]:
+                if entry.get("path") == "metrics.json":
+                    entry["sha256"] = crlf_digest
+            manifest_path.write_text(
+                json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+            )
+            report = validate_submission(root, "alice", changed)
+            joined = "\n".join(report.errors)
+            self.assertIn("sha256 mismatch for `metrics.json`", joined)
+            self.assertIn("matches this file's CRLF form", joined)
+            self.assertIn("core.autocrlf=false", joined)
+
+    def test_crlf_committed_bytes_digest_mismatch_explains_line_endings(self) -> None:
+        """The reverse case: committed bytes are CRLF while the manifest used LF."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            base = "submissions/alice/ai-urban-loop"
+            changed = self.write_minimal_ai_package(root, base)
+            manifest_path = root / base / "manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            target = root / base / "metrics.json"
+            lf_bytes = target.read_bytes().replace(b"\r\n", b"\n")
+            target.write_bytes(lf_bytes.replace(b"\n", b"\r\n"))
+            for entry in manifest["files"]:
+                if entry.get("path") == "metrics.json":
+                    entry["sha256"] = hashlib.sha256(lf_bytes).hexdigest()
+            manifest_path.write_text(
+                json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+            )
+            report = validate_submission(root, "alice", changed)
+            joined = "\n".join(report.errors)
+            self.assertIn("matches this file's LF form", joined)
+
+    def test_unrelated_manifest_digest_mismatch_has_no_line_ending_hint(self) -> None:
+        """A genuinely stale digest must not be mislabelled as a line-ending problem."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            base = "submissions/alice/ai-urban-loop"
+            changed = self.write_minimal_ai_package(root, base)
+            manifest_path = root / base / "manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            for entry in manifest["files"]:
+                if entry.get("path") == "metrics.json":
+                    entry["sha256"] = "0" * 64
+            manifest_path.write_text(
+                json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+            )
+            report = validate_submission(root, "alice", changed)
+            joined = "\n".join(report.errors)
+            self.assertIn("sha256 mismatch for `metrics.json`", joined)
+            self.assertNotIn("CRLF form", joined)
+            self.assertNotIn("LF form", joined)
+
     def test_stale_translation_manifest_hash_is_non_blocking(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
