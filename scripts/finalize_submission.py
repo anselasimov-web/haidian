@@ -44,14 +44,26 @@ def digest(path: Path) -> str:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("submission_dir")
+    parser.add_argument(
+        "--refinalize",
+        action="store_true",
+        help="Refresh an already ready_for_review package after another editing round",
+    )
     args = parser.parse_args()
     root = Path(args.submission_dir).resolve()
     manifest_path = root / "manifest.json"
     if not manifest_path.is_file():
         parser.error(f"manifest.json not found under {root}")
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    if manifest.get("package_state") != "scaffold":
-        parser.error("package_state must be scaffold before finalization")
+    package_state = manifest.get("package_state")
+    if args.refinalize:
+        if package_state != "ready_for_review":
+            parser.error("--refinalize only applies to a package that is already ready_for_review")
+    elif package_state != "scaffold":
+        parser.error(
+            "package_state must be scaffold before finalization; "
+            "rerun with --refinalize to refresh an already ready_for_review package"
+        )
 
     declared = {
         str(item.get("path")): str(item.get("sha256"))
@@ -77,11 +89,23 @@ def main() -> int:
 
     def changed(rel: str) -> bool:
         path = root / rel
-        return path.is_file() and rel in declared and digest(path) != declared[rel]
+        if not path.is_file():
+            return False
+        if args.refinalize:
+            # A finalized manifest records the package's own previous output, so an equal
+            # hash only proves the file was not edited this round. It is no longer evidence
+            # that the file is still an untouched scaffold artifact, and a deterministic
+            # rebuild that reproduces identical bytes must not be rejected.
+            return True
+        return rel in declared and digest(path) != declared[rel]
+
+    # Under --refinalize the only way changed() can fail is a missing file.
+    missing_output = "is missing" if args.refinalize else "is unchanged from the generated scaffold"
+    missing_drawing = "is missing" if args.refinalize else "is unchanged from the placeholder drawing"
 
     for rel in READABLE_OUTPUTS:
         if not changed(rel):
-            errors.append(f"{rel} is unchanged from the generated scaffold")
+            errors.append(f"{rel} {missing_output}")
     unchanged_figures = [rel for rel in FIGURES if not changed(rel)]
     if unchanged_figures:
         errors.append("all five proposal figures must be regenerated: " + ", ".join(unchanged_figures))
@@ -90,7 +114,7 @@ def main() -> int:
     for rel in DRAWINGS:
         path = root / rel
         if not changed(rel):
-            errors.append(f"{rel} is unchanged from the placeholder drawing")
+            errors.append(f"{rel} {missing_drawing}")
         elif is_empty_pdf(path.read_bytes()):
             errors.append(f"{rel} has no pages")
 
@@ -173,7 +197,8 @@ def main() -> int:
         if rel and rel != "manifest.json" and (root / rel).is_file():
             item["sha256"] = digest(root / rel)
     manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    print(f"Review-ready package: {root}")
+    state_label = "Refinalized review-ready package" if args.refinalize else "Review-ready package"
+    print(f"{state_label}: {root}")
     print("Run self_check_submission.py now. Any later file edit requires refreshed manifest hashes and another full validation.")
     return 0
 
