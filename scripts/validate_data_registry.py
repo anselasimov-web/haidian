@@ -13,7 +13,7 @@ Validation rules
 - Every source entry must have a unique ``source_id`` matching
   ``^[A-Z0-9][A-Z0-9_-]+$``.
 - Required fields per entry: ``title``, ``publisher``, ``source_kind``,
-  ``url``, ``accessed_date``, ``file_type``, ``authority_level``,
+  ``url``, ``published_date``, ``accessed_date``, ``file_type``, ``authority_level``,
   ``timeliness_level``, ``public_access_status``, ``license_summary``,
   ``review_status``, ``usable_for_formal``, ``allowed_uses``,
   ``prohibited_uses``, ``topics``.
@@ -164,6 +164,7 @@ def validate_source(report: RegistryReport, repo_root: Path, source: dict[str, A
         "publisher",
         "source_kind",
         "url",
+        "published_date",
         "accessed_date",
         "file_type",
         "authority_level",
