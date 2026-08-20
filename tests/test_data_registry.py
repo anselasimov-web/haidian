@@ -36,6 +36,19 @@ class DataRegistryTests(unittest.TestCase):
         self.assertTrue(report["ok"])
         self.assertGreaterEqual(report["source_count"], 1)
 
+    def test_invalid_file_type_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            registry = json.loads((REPO_ROOT / "data" / "source_registry.json").read_text(encoding="utf-8"))
+            registry["sources"][0]["file_type"] = "spreadsheet"
+            path = root / "registry.json"
+            path.write_text(json.dumps(registry), encoding="utf-8")
+
+            completed = run_registry_validator(path, repo_root=REPO_ROOT)
+            self.assertNotEqual(completed.returncode, 0)
+            report = json.loads(completed.stdout)
+            self.assertIn("invalid file_type 'spreadsheet'", "\n".join(report["errors"]))
+
     def test_registry_references_existing_local_paths(self) -> None:
         registry = json.loads((REPO_ROOT / "data" / "source_registry.json").read_text(encoding="utf-8"))
         for source in registry["sources"]:
