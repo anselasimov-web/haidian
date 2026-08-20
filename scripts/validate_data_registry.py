@@ -21,6 +21,7 @@ Validation rules
   ``CLEARED_USER_DOCUMENT``, ``PROVISIONAL_REPOSITORY``,
   ``OPEN_LICENSE_REFERENCE``.
 - ``source_kind`` must be one of the recognized kind values.
+- ``file_type`` must be one of the recognized file-type values.
 - ``timeliness_level`` must be one of ``T0``–``T4`` or ``NA``.
 - ``public_access_status`` must be a recognized access-status value.
 - ``review_status`` must be one of ``approved``, ``provisional``,
@@ -80,6 +81,17 @@ VALID_SOURCE_KINDS = {
     "provisional_repository_data",
     "open_license_reference",
     "international_reference",
+}
+VALID_FILE_TYPES = {
+    "html",
+    "markdown",
+    "json",
+    "geojson",
+    "pdf",
+    "docx",
+    "csv",
+    "webpage",
+    "mixed",
 }
 VALID_TIMELINESS_LEVELS = {"T0", "T1", "T2", "T3", "T4", "NA"}
 VALID_ACCESS_STATUSES = {
@@ -184,6 +196,8 @@ def validate_source(report: RegistryReport, repo_root: Path, source: dict[str, A
         report.error(f"{source_id}: invalid authority_level {source.get('authority_level')!r}")
     if source.get("source_kind") not in VALID_SOURCE_KINDS:
         report.error(f"{source_id}: invalid source_kind {source.get('source_kind')!r}")
+    if source.get("file_type") not in VALID_FILE_TYPES:
+        report.error(f"{source_id}: invalid file_type {source.get('file_type')!r}")
     if source.get("timeliness_level") not in VALID_TIMELINESS_LEVELS:
         report.error(f"{source_id}: invalid timeliness_level {source.get('timeliness_level')!r}")
     if source.get("public_access_status") not in VALID_ACCESS_STATUSES:
