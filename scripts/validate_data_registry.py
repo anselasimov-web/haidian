@@ -31,7 +31,8 @@ Validation rules
   ``review_status=approved``; ``provisional`` sources cannot be
   ``usable_for_formal=yes``; ``restricted_or_unknown`` sources cannot be
   ``approved``.
-- ``local_paths`` items must be relative repo paths that exist on disk.
+- ``local_paths`` must be an array whose items are relative repo paths that
+  exist on disk.
 
 Usage
 -----
@@ -215,11 +216,16 @@ def validate_source(report: RegistryReport, repo_root: Path, source: dict[str, A
     if access_status in {"cleared_for_repo", "provisional_repository"} and isinstance(url, str):
         validate_local_path(report, repo_root, source_id, url)
 
-    for local_path in source.get("local_paths", []) or []:
-        if not isinstance(local_path, str):
-            report.error(f"{source_id}: local_paths items must be strings")
-            continue
-        validate_local_path(report, repo_root, source_id, local_path)
+    if "local_paths" in source:
+        local_paths = source.get("local_paths")
+        if not isinstance(local_paths, list):
+            report.error(f"{source_id}: local_paths must be an array")
+        else:
+            for local_path in local_paths:
+                if not isinstance(local_path, str):
+                    report.error(f"{source_id}: local_paths items must be strings")
+                    continue
+                validate_local_path(report, repo_root, source_id, local_path)
 
     review_status = source.get("review_status")
     usable_for_formal = source.get("usable_for_formal")
