@@ -155,6 +155,31 @@ class DataRegistryTests(unittest.TestCase):
             self.assertIn("restricted_or_unknown sources cannot be approved", joined)
             self.assertIn("provisional sources cannot be formal-ready", joined)
 
+    def test_required_scalar_metadata_must_be_non_empty_strings(self) -> None:
+        baseline = json.loads((REPO_ROOT / "data" / "source_registry.json").read_text(encoding="utf-8"))
+        cases = {
+            "title": None,
+            "publisher": {"name": "not-a-string"},
+            "url": ["https://example.com"],
+            "file_type": "   ",
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for key, invalid_value in cases.items():
+                with self.subTest(field=key):
+                    registry = json.loads(json.dumps(baseline))
+                    source_id = registry["sources"][0]["source_id"]
+                    registry["sources"][0][key] = invalid_value
+                    path = root / f"registry-{key}.json"
+                    path.write_text(json.dumps(registry), encoding="utf-8")
+                    completed = run_registry_validator(path)
+                    self.assertNotEqual(completed.returncode, 0, completed.stdout + completed.stderr)
+                    report = json.loads(completed.stdout)
+                    self.assertIn(
+                        f"{source_id}: {key} must be a non-empty string",
+                        report["errors"],
+                    )
+
 
 if __name__ == "__main__":
     unittest.main()
