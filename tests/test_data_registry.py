@@ -155,6 +155,44 @@ class DataRegistryTests(unittest.TestCase):
             self.assertIn("restricted_or_unknown sources cannot be approved", joined)
             self.assertIn("provisional sources cannot be formal-ready", joined)
 
+    def test_required_scalar_fields_must_be_non_empty_strings(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            registry = {
+                "schema_version": "0.1.0",
+                "updated_date": "2026-08-20",
+                "sources": [
+                    {
+                        "source_id": "BAD-SCALARS",
+                        "title": None,
+                        "publisher": {"name": "Publisher"},
+                        "source_kind": "official_open_data",
+                        "url": ["https://example.com/data"],
+                        "accessed_date": "2026-08-20",
+                        "file_type": "   ",
+                        "authority_level": "A0",
+                        "timeliness_level": "T0",
+                        "public_access_status": "public_url",
+                        "license_summary": "Public source page; reuse terms checked separately.",
+                        "review_status": "approved",
+                        "usable_for_formal": "yes",
+                        "allowed_uses": ["formal evidence"],
+                        "prohibited_uses": ["none"],
+                        "topics": ["data quality"],
+                    }
+                ],
+            }
+            path = root / "registry.json"
+            path.write_text(json.dumps(registry), encoding="utf-8")
+            completed = run_registry_validator(path, repo_root=root)
+            self.assertNotEqual(completed.returncode, 0)
+            report = json.loads(completed.stdout)
+            joined = "\n".join(report["errors"])
+            self.assertIn("title must be a non-empty string", joined)
+            self.assertIn("publisher must be a non-empty string", joined)
+            self.assertIn("url must be a non-empty string", joined)
+            self.assertIn("file_type must be a non-empty string", joined)
+
 
 if __name__ == "__main__":
     unittest.main()
