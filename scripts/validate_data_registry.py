@@ -9,7 +9,7 @@ file directly; submit a ``[source-registry]`` Issue to request additions.
 Validation rules
 ----------------
 - ``schema_version`` must be ``"0.1.0"``.
-- ``updated_date`` must be ``YYYY-MM-DD`` format.
+- ``updated_date`` must be a valid ``YYYY-MM-DD`` calendar date.
 - Every source entry must have a unique ``source_id`` matching
   ``^[A-Z0-9][A-Z0-9_-]+$``.
 - Required fields per entry: ``title``, ``publisher``, ``source_kind``,
@@ -57,6 +57,7 @@ import json
 import re
 import sys
 from dataclasses import dataclass, field
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -132,6 +133,16 @@ def is_non_empty_list(value: Any) -> bool:
     return isinstance(value, list) and all(isinstance(item, str) and item.strip() for item in value) and bool(value)
 
 
+def is_valid_iso_date(value: Any) -> bool:
+    if not isinstance(value, str) or not DATE_RE.match(value):
+        return False
+    try:
+        date.fromisoformat(value)
+    except ValueError:
+        return False
+    return True
+
+
 def validate_local_path(report: RegistryReport, repo_root: Path, source_id: str, value: str) -> None:
     path = Path(value)
     if path.is_absolute() or ".." in path.parts:
@@ -194,11 +205,11 @@ def validate_source(report: RegistryReport, repo_root: Path, source: dict[str, A
         report.error(f"{source_id}: invalid usable_for_formal {source.get('usable_for_formal')!r}")
 
     accessed_date = source.get("accessed_date")
-    if not isinstance(accessed_date, str) or not DATE_RE.match(accessed_date):
-        report.error(f"{source_id}: accessed_date must be YYYY-MM-DD")
+    if not is_valid_iso_date(accessed_date):
+        report.error(f"{source_id}: accessed_date must be a valid YYYY-MM-DD calendar date")
     published_date = source.get("published_date")
-    if published_date is not None and (not isinstance(published_date, str) or not DATE_RE.match(published_date)):
-        report.error(f"{source_id}: published_date must be YYYY-MM-DD or null")
+    if published_date is not None and not is_valid_iso_date(published_date):
+        report.error(f"{source_id}: published_date must be a valid YYYY-MM-DD calendar date or null")
 
     for key in ["allowed_uses", "prohibited_uses", "topics"]:
         if not is_non_empty_list(source.get(key)):
@@ -244,8 +255,8 @@ def validate_registry(repo_root: Path, registry_path: Path) -> RegistryReport:
     if data.get("schema_version") != "0.1.0":
         report.error("registry schema_version must be 0.1.0")
     updated_date = data.get("updated_date")
-    if not isinstance(updated_date, str) or not DATE_RE.match(updated_date):
-        report.error("registry updated_date must be YYYY-MM-DD")
+    if not is_valid_iso_date(updated_date):
+        report.error("registry updated_date must be a valid YYYY-MM-DD calendar date")
     sources = data.get("sources")
     if not isinstance(sources, list) or not sources:
         report.error("registry sources must be a non-empty array")
