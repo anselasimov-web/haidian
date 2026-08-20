@@ -155,6 +155,46 @@ class DataRegistryTests(unittest.TestCase):
             self.assertIn("restricted_or_unknown sources cannot be approved", joined)
             self.assertIn("provisional sources cannot be formal-ready", joined)
 
+    def test_local_paths_requires_array_container(self) -> None:
+        valid_source = {
+            "source_id": "TEST-SOURCE",
+            "title": "Test Source",
+            "publisher": "Test Publisher",
+            "source_kind": "official_open_data",
+            "url": "https://example.com/source",
+            "published_date": "2026-01-01",
+            "accessed_date": "2026-08-20",
+            "file_type": "webpage",
+            "authority_level": "A0",
+            "timeliness_level": "T0",
+            "public_access_status": "public_url",
+            "license_summary": "Public source; test fixture only.",
+            "review_status": "approved",
+            "usable_for_formal": "yes",
+            "allowed_uses": ["test"],
+            "prohibited_uses": ["none"],
+            "topics": ["test"],
+        }
+        invalid_values = ["brief/data/file.json", {"path": "brief/data/file.json"}, 7]
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for value in invalid_values:
+                with self.subTest(local_paths=value):
+                    source = dict(valid_source, local_paths=value)
+                    registry = {
+                        "schema_version": "0.1.0",
+                        "updated_date": "2026-08-20",
+                        "sources": [source],
+                    }
+                    path = root / "registry.json"
+                    path.write_text(json.dumps(registry), encoding="utf-8")
+                    completed = run_registry_validator(path, repo_root=root)
+                    self.assertNotEqual(completed.returncode, 0, completed.stdout + completed.stderr)
+                    self.assertEqual(completed.stderr, "")
+                    report = json.loads(completed.stdout)
+                    self.assertFalse(report["ok"])
+                    self.assertIn("TEST-SOURCE: local_paths must be an array of strings", report["errors"])
+
 
 if __name__ == "__main__":
     unittest.main()
