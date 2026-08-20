@@ -541,6 +541,8 @@ find submissions/<login>/<slug> -type l
 
 这条机制本身来自 Issue #1631 第 3 项("数据信号:双语产物同字节与空 constraints 图层——两个现行校验未覆盖的盲区"),由 PR #1690(`feat(scaffold+validate): 空 constraints 的机器可读缺口声明与 warning 级提示,不改变通过判定`)落地,2026-08-11T07:59:51Z 合并(merge commit `d89526ec618b81266dd919207bb29240510d02ea`)。
 
+**更新(2026-08-20):** Issue #1631 第 3 项里提到的另一个盲区——"双语产物同字节"——此前一直没有对应检查,现在也补上了同级别的机器可读提示。PR #1689(`report_identical_bilingual_artifacts()`,`scripts/validate_submission.py:2530` 起,merge commit `e289e4abc` 于 2026-08-20T04:43:30Z 合并)在四个条件同时满足时才打一条 **warning**(不参与 `report.ok`,历史包不追溯):该条目声明了 `translation_of`,或声明了 `language: "zh"/"en"` 且文件名带对应语言码后缀;该条目与其对应的主文件条目**都没有**声明 `language: "neutral"`;两个文件在磁盘上都存在;两个文件字节 sha256 相同。合法的无文字/语言中立产物(比如一张不含文字的场地区位图)只要声明 `language: "neutral"` 就会被跳过,不会被误伤;这条提示只提醒,不阻断 CI,也不影响是否能合并。
+
 ---
 
 ## 9. tracks.json / scenarios 根级注册表
@@ -645,16 +647,70 @@ for issue in scan(data):
 
 ---
 
+## 13. PNG 解码预算(2026-08-19 新增校验)
+
+`scripts/validate_submission.py` 新增了对 PNG 文件的结构完整性与解码体积校验(commit `298500d70`,2026-08-19T13:53:31Z 合并,"fix: reject corrupt PNG submission assets")。这不是只看扩展名或文件体积:校验器逐字节解析 PNG chunk 结构(签名、每个 chunk 的 CRC、IHDR/PLTE/IDAT/IEND 出现顺序与唯一性),并且**真的用 `zlib` 解压一遍 IDAT 流**,核对解压出来的扫描线字节数与 IHDR 声明的宽高、位深、颜色类型、隔行扫描(Adam7)方式算出的期望值是否一致(`png_integrity_result()`,`:768-949`);伪装扩展名或被截断/损坏的 PNG 过不了这一关(调用点在 `validate_manifest_file()` 里,`:1859-1868`)。
+
+**新增的两条解码体积上限,是本节要提醒的重点:**
+
+```python
+MAX_PNG_INFLATED_BYTES = 128 * 1024 * 1024         # 单张 PNG 解码后体积上限(128 MiB),:306
+MAX_TOTAL_PNG_INFLATED_BYTES = 1024 * 1024 * 1024  # 整包全部 PNG 解码后累计上限(1024 MiB),:307
+```
+
+单张图按 IHDR 声明的宽高/位深/颜色类型算出的解码后期望字节数(逐行 `1`(过滤字节)`+ 行字节数`,隔行扫描另按 Adam7 七趟分别累加)超过 128 MiB 直接拒收;整包所有 PNG **累计**解码体积超过 1024 MiB 同样拒收——且后面每一张图能用的额度会被前面已经"花掉"的预算压缩(`:1859-1868`,`remaining_budget = MAX_TOTAL_PNG_INFLATED_BYTES - report.png_inflated_bytes`),报错落在预算被打满那一刻正在检查的那张图上,但那张图本身未必有问题。
+
+**现象**:manifest 里逐张单看都不算离谱大小的高分辨率 PNG(比如若干张 7200×4200 的成图/详图),累加解码体积很容易冲上 2 GB 量级——单张(以 truecolor 8-bit、7200×4200 估算,解码后约 86 MiB)还留在 128 MiB 单张上限以内,但同一个包里放上二三十张同量级大图,总解码预算就会在中途某一张上被打满。
+
+**根因**:这是分辨率/张数选择问题,不是文件损坏。解码后体积只取决于 IHDR 的宽×高×位深×通道数,与 PNG 压缩后的磁盘体积没有必然对应关系——压缩率高、磁盘体积不大的高分辨率图,解码后依然是宽×高直接相乘的原始像素体积,这条预算按的是解压后的字节数,不是你在磁盘上看到的文件大小。
+
+**修法**:按实际展示/评审需要控制分辨率(网页预览、评审阅读通常不需要 7200px 宽的整幅原图,可以另存一版降采样图作为 `visualization`/`proposal_figure`,真正需要保留的高精度版本只放一两张代表性的,而不是整批同分辨率导出);或者控制大图总张数,给包里 PNG 的总解码体积留出余量。JPEG/WebP 不受这两条 PNG 专属解码上限约束,确有必要保留全分辨率存档图时可以考虑改用这两种格式(仍需满足各角色既有的 `MAX_ASSET_BYTES`/`MAX_DRAWING_BYTES` 等磁盘体积上限,这两条没有变)。
+
+**自验**:本地按 IHDR 尺寸估算一遍解码体积,比反复推送去撞 CI 快(不需要真的解压):
+
+```python
+import pathlib
+from PIL import Image  # 只读 header,不解压;等价逻辑可参考 validate_submission.py:png_integrity_result()
+
+total = 0
+for p in sorted(pathlib.Path("submissions/<login>/<slug>").rglob("*.png")):
+    with Image.open(p) as im:
+        w, h = im.size
+        channels = {"L": 1, "LA": 2, "RGB": 3, "RGBA": 4, "P": 1}.get(im.mode, 4)
+    inflated = h * (1 + (w * channels * 8 + 7) // 8)  # 8-bit、非隔行估算
+    total += inflated
+    print(f"{p}: ~{inflated / 1024 / 1024:.1f} MiB decoded, running total {total / 1024 / 1024:.1f} MiB")
+
+print("超出 1024 MiB 总预算" if total > 1024 * 1024 * 1024 else "预算内")
+```
+
+---
+
 ## 附:常见 CI 失败速查表
 
-> 来自对 200+ 个真实失败案例的诊断——本账号在本仓库累计深审 213+ 条评审记录(见本地运维日志),覆盖 CRLF 哈希失配、readiness 契约缺口、0.2.x 迁移、手写包结构错位、越界路径、CI 基础设施抖动六大类根因。下表是这六类的一行判定法与一行修法,按"先查哪类最快命中"的经验顺序排列,不代表出现频率排序。
+> 来自对 200+ 个真实失败案例的诊断——本账号在本仓库累计深审 213+ 条评审记录(见本地运维日志),覆盖 CRLF 哈希失配、readiness 契约缺口、0.2.x 迁移、PNG 解码预算、手写包结构错位、越界路径、分支严重落后 main、CI 基础设施抖动八大类根因。下表是这八类的一行判定法与一行修法,按"先查哪类最快命中"的经验顺序排列,不代表出现频率排序。(2026-08-20 增补 PNG 解码预算、分支严重落后 main 两类,并补全 readiness 契约缺口一类的具体枚举值,见文末"2026-08-20 时效性增补说明"。)
 
 | 根因类别 | 一行判定法 | 一行修法 |
 | --- | --- | --- |
 | **CRLF 哈希失配** | 报错形如 `sha256 mismatch`,且错误文案里出现"declared digest matches the CRLF form, but Git is validating LF bytes"(或反过来 LF/CRLF 互换,`validate_submission.py:1650-1660`);或本地对同一文件分别算 CRLF 字节哈希与 `git_blob_sha256()` 摘要,两者其一命中声明值 | 不要手工用文件字节重算哈希;跑官方 `finalize_submission.py`/`refresh_submission_manifest.py` 重新生成 manifest,让哈希基线对齐 Git pending blob(`scripts/git_blob_hashes.py::git_blob_sha256()`),不要在 CRLF 工作区里自己 `bytes.replace(b"\n", b"\r\n")` 逆算 |
-| **契约缺口(readiness/self_check)** | 报错含 `unsupported readiness_contract`、`must set validation_claim.self_checked=true`、或 `must persist pass/blocking gates for ...`(`validate_readiness_claim()`,`:1725-1800`);常伴随手写 `self_check.json` 体积远小于官方产物(官方产物量级 ~8000 字节,手写常见 ~1000-1500 字节) | 跑 `python3 scripts/self_check_submission.py <dir> --pr-author <login> --mark-self-checked`,不要手改 `validation_claim.readiness_contract`/`self_check.json` 的字段值去"凑合法" |
+| **契约缺口(readiness/self_check)** | 报错含 `unsupported readiness_contract`——`readiness_contract` 当前只有**一个**合法值 `"persisted-self-check-v1"`(`PERSISTED_READINESS_CONTRACT`,`validate_submission.py:30`);实测常见的手写错法是沿用旧文案自造 `"participant-reviewed"` 这类取值,报错原文形如 `unsupported readiness_contract 'participant-reviewed'`(`:2007-2009`)。另外两种报错是 `must set validation_claim.self_checked=true`、或 `must persist pass/blocking gates for ...`(`validate_readiness_claim()`,`:1725-1800`);常伴随手写 `self_check.json` 体积远小于官方产物(官方产物量级 ~8000 字节,手写常见 ~1000-1500 字节) | 跑 `python3 scripts/self_check_submission.py <dir> --pr-author <login> --mark-self-checked`,不要手改 `validation_claim.readiness_contract`/`self_check.json` 的字段值去"凑合法"——包括不要照抄旧文档、旧包或直觉写出的 `participant-reviewed` 之类取值,唯一受支持的值就是 `persisted-self-check-v1`,且必须由自检工具写入,不是手填 |
 | **0.2.x 迁移未过** | 报错含 `new manifests must adopt schema_version 0.2.x`,或 `published schema blocking: ... role ... must be one of [...]`/`role_detail`(见本文 §6) | manifest 是 `added`/`copied`/`renamed` 状态时必须先跑 `validate_manifest_schema.py` 看 `legacy_role_findings`,再决定手改还是重新 scaffold;`role` 只能落在 27 词表或 `other`+`role_detail`,自定义验证声明放 `validation_claim.extensions.x-*`,不要塞进 `files[]` 条目 |
+| **PNG 解码预算超限** | 报错含 `invalid PNG` 且原因文案是 `IHDR dimensions exceed the safe decoding limit` 或 `IDAT stream expands beyond the IHDR dimensions`(`png_integrity_result()`,`validate_submission.py:768-949`,commit `298500d70` 2026-08-19 新增);常见误判方向是以为报错指向的那一张图坏了或太大,其实单张常常不大,撞的是**整包所有 PNG 累计**共享的 1024 MiB 解码预算(`MAX_TOTAL_PNG_INFLATED_BYTES`,`:307`),不是单张 128 MiB 上限(`MAX_PNG_INFLATED_BYTES`,`:306`)(见本文 §13) | 按需要降分辨率或减少同批次高分辨率大图张数,不要重新导出"同样大小"的图再试;先用 §13 的估算脚本按 IHDR 宽高预估解码体积再决定要不要精简 |
 | **手写包结构错位** | 症状是同一份 manifest/self_check/matrix 里**大量**字段名系统性对不上契约(比如整份用 `manifest_version`/`artifacts`/`type` 而不是官方的 `schema_version`/`files`/`role`;`self_check.checks` 写成对象不是数组);错误条数常常一次性几十到几百条,且集中在少数几个文件 | 与其逐条对错误清单改,不如重跑 `python3 scripts/scaffold_ai_submission.py <login> <slug>` 生成空骨架,再把已有内容(proposal 正文、图纸、图片)原样搬进新骨架——实测比逐条修复系统性错位快得多,四门校验(SPATIAL/VISUAL/PROFESSIONAL/DETERMINISTIC)直接从新骨架起步全绿 |
 | **越界(改动跑出自己目录)** | 若 PR 改动的路径**全部**不在 `submissions/` 下(比如整包错放到仓库根目录),`is_non_submission_pr()` 返回 True(`github_pr_validation.py:464-485`),CI 只贴一条"non-submission code/docs/test PR; participant package validation was not applicable"的信息性评论——**这条看起来友好的绿色评论恰恰意味着你的包从未被当作投稿校验过、也不会进入评审队列**;若改动确实在 `submissions/` 下但混了别人目录或跨了多个目录,`is_review_queue_candidate()` 返回 False(要求单一 `submissions/<pr-author>/<slug>/` 根,`:443-462`),包会被正常校验但排不进评审队列 | 提交前自查 `gh pr diff <PR> --name-only`,确认全部路径都以 `submissions/<你的登录名>/<你的 slug>/` 开头且只有这一个根目录;误放到仓库根或混了他人目录要重新开分支只放自己目录的改动,不要在同一 PR 里裹带任何仓库根文件 |
+| **分支严重落后 main** | PR 改动路径都在自己目录下、内容看起来正常,却一次性报出几十到上百条互不相关的错误(哈希失配、字段缺失、schema 版本不对等混杂,彼此看不出共同原因);`gh api repos/open-city-ai/haidian/compare/main...<head_sha>` 的 `behind_by` 达到三位数以上提交 | 不要逐条对错误清单改——绝大多数是下游症状,根因是校验器实际检出的树上找不到你包文件对应的历史版本;备份自己的投稿目录,从最新 `upstream/main` 开一个新分支,把投稿目录整个复制回去再提交,不要在陈旧分支上直接 rebase/merge 硬解决(冲突量可能同样巨大) |
 | **CI 基础设施抖动** | `gh api .../commits/<head_sha>/check-runs` 返回 `total_count: 0` 且 `check-suites` 的 `conclusion` 是 `failure`/`cancelled`,同时最近若干次同一 workflow 的其它运行大多数 `conclusion: success` 且带真实 job 数(说明不是普遍故障,是这一次调度或队列抖动);或 run 本身 `conclusion: cancelled` 且耗时接近 `timeout-minutes` 上限(队列排队超时) | 不要立刻推新 commit 去"重试"——先用 `gh run list --workflow=submission-validation.yml --limit 20` 确认基础设施整体是否恢复;确认某次 run 已经真正终止(`status: completed`)且距今数小时以上仍是 0 job,再推新 head 触发新一轮校验;高峰期本身会排队是设计如此(`concurrency: group: submission-validation-api, queue: max`),不是故障,不要频繁轮询或空评论催促 |
 
+
+---
+
+## 2026-08-20 时效性增补说明
+
+本文件在原有内容基础上做了一次时效性核实与增补,核实基准为当前 `main`(`e289e4abc`,2026-08-20)。增补内容:
+
+- 新增 **§13 PNG 解码预算**,对应 commit `298500d70`(2026-08-19 合并)新增的 PNG 结构完整性 + 解码体积校验;
+- CI 速查表新增 **PNG 解码预算超限**、**分支严重落后 main** 两个根因类别(原六类扩到八类);
+- CI 速查表"契约缺口(readiness/self_check)"一行补上了 `readiness_contract` 当前唯一合法值 `persisted-self-check-v1` 与实测常见错误取值 `participant-reviewed`;
+- §8 补充说明 PR #1689(2026-08-20 合并)已经把 Issue #1631 第 3 项提到的"双语产物同字节"盲区补上了 warning 级检查,不再是未覆盖状态。
+
+未改动原有 6 处必改章节(第一~五节)、§4.2 衔接说明、§6/§7/§9/§10/§11/§12 正文——均已核实仍然成立,不存在因这几天新提交产生的偏差。核实过程未对仓库执行任何写操作,仅使用 `gh api` 只读端点。
