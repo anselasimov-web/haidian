@@ -43,6 +43,20 @@ class DataRegistryTests(unittest.TestCase):
                 with self.subTest(source_id=source["source_id"], local_path=local_path):
                     self.assertTrue((REPO_ROOT / local_path).exists())
 
+    def test_local_paths_container_must_be_array(self) -> None:
+        registry = json.loads((REPO_ROOT / "data" / "source_registry.json").read_text(encoding="utf-8"))
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "registry.json"
+            for invalid in ["brief/site-package", {"path": "brief/site-package"}, 1, None]:
+                with self.subTest(local_paths=invalid):
+                    candidate = json.loads(json.dumps(registry))
+                    candidate["sources"][0]["local_paths"] = invalid
+                    path.write_text(json.dumps(candidate), encoding="utf-8")
+                    completed = run_registry_validator(path)
+                    self.assertNotEqual(completed.returncode, 0, completed.stdout + completed.stderr)
+                    report = json.loads(completed.stdout)
+                    self.assertIn("local_paths must be an array", "\n".join(report["errors"]))
+
     def test_reviewed_policy_sources_keep_formal_use_boundaries(self) -> None:
         registry = json.loads((REPO_ROOT / "data" / "source_registry.json").read_text(encoding="utf-8"))
         sources = {source["source_id"]: source for source in registry["sources"]}
