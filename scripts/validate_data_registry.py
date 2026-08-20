@@ -128,6 +128,10 @@ def load_json(path: Path, report: RegistryReport) -> Any:
     return None
 
 
+def is_non_empty_string(value: Any) -> bool:
+    return isinstance(value, str) and bool(value.strip())
+
+
 def is_non_empty_list(value: Any) -> bool:
     return isinstance(value, list) and all(isinstance(item, str) and item.strip() for item in value) and bool(value)
 
@@ -179,6 +183,10 @@ def validate_source(report: RegistryReport, repo_root: Path, source: dict[str, A
     for key in required:
         if key not in source:
             report.error(f"{source_id}: missing {key}")
+
+    for key in ["title", "publisher", "url", "file_type"]:
+        if key in source and not is_non_empty_string(source.get(key)):
+            report.error(f"{source_id}: {key} must be a non-empty string")
 
     if source.get("authority_level") not in VALID_AUTHORITY_LEVELS:
         report.error(f"{source_id}: invalid authority_level {source.get('authority_level')!r}")
