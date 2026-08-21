@@ -49,9 +49,13 @@ def read_json(path: Path) -> Any:
 def load_source_registry(repo_root: Path) -> dict[str, Any]:
     """Load ``data/source_registry.json`` and return it as a dict.
 
-    Returns an empty dict when the file is absent or unparseable.
+    Returns an empty dict when the file is absent. Invalid JSON raises
+    ``ValueError`` so review, scaffold, and frontend tooling cannot silently
+    treat a broken authority registry as an empty but valid registry.
     """
     data = read_json(repo_root / DEFAULT_SOURCE_REGISTRY_PATH)
+    if isinstance(data, dict) and "_error" in data:
+        raise ValueError(f"{DEFAULT_SOURCE_REGISTRY_PATH}: {data['_error']}")
     return data if isinstance(data, dict) else {}
 
 
