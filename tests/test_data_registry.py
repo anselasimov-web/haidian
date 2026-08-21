@@ -155,6 +155,20 @@ class DataRegistryTests(unittest.TestCase):
             self.assertIn("restricted_or_unknown sources cannot be approved", joined)
             self.assertIn("provisional sources cannot be formal-ready", joined)
 
+    def test_invalid_file_type_is_rejected(self) -> None:
+        registry = json.loads((REPO_ROOT / "data" / "source_registry.json").read_text(encoding="utf-8"))
+        registry["sources"][0]["file_type"] = "spreadsheet"
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "registry.json"
+            path.write_text(json.dumps(registry), encoding="utf-8")
+            completed = run_registry_validator(path)
+        self.assertNotEqual(completed.returncode, 0)
+        report = json.loads(completed.stdout)
+        self.assertIn(
+            f"{registry['sources'][0]['source_id']}: invalid file_type 'spreadsheet'",
+            report["errors"],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
