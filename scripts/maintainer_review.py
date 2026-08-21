@@ -56,7 +56,12 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from review_submission import build_prompt, build_review_input
+from review_submission import (
+    ReviewOutputError,
+    build_prompt,
+    build_review_input,
+    validate_output_dir,
+)
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -243,6 +248,7 @@ def build_advisory(summary: dict[str, Any], review_input: dict[str, Any]) -> str
 
 
 def run_maintainer_review(repo_root: Path, submission_dir: Path, pr_author: str, out_dir: Path) -> dict[str, Any]:
+    validate_output_dir(repo_root, out_dir)
     self_check_result = run_json_command(
         [
             sys.executable,
@@ -315,7 +321,10 @@ def main() -> int:
             out_dir = repo_root / out_dir
     else:
         out_dir = repo_root / DEFAULT_OUTPUT_ROOT / submission_dir.name
-    summary = run_maintainer_review(repo_root, submission_dir, args.pr_author, out_dir)
+    try:
+        summary = run_maintainer_review(repo_root, submission_dir, args.pr_author, out_dir)
+    except ReviewOutputError as exc:
+        parser.error(str(exc))
     if args.json:
         print(json.dumps(summary, ensure_ascii=False, indent=2))
     elif args.comment:
