@@ -313,6 +313,18 @@ def write_registry_json(data: dict[str, Any], path: Path) -> None:
     path.write_text(json.dumps(serializable, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
+def paths_alias(left: Path, right: Path) -> bool:
+    """Return whether two paths resolve to the same existing or intended file."""
+    if left.resolve() == right.resolve():
+        return True
+    if left.exists() and right.exists():
+        try:
+            return left.samefile(right)
+        except OSError:
+            return False
+    return False
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--repo-root", default=".")
@@ -338,6 +350,11 @@ def main() -> int:
     out_path = Path(args.out)
     if not out_path.is_absolute():
         out_path = repo_root / out_path
+
+    for label, source_path in (("input source", input_path), ("existing registry", registry_path)):
+        if paths_alias(out_path, source_path):
+            parser.error(f"--out must not overwrite the {label}: {source_path}")
+
     current_year = args.current_year or dt.date.today().year
 
     draft = build_draft(
