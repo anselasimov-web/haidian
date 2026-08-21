@@ -136,6 +136,35 @@ class PublicSourcesTests(unittest.TestCase):
             report = validate_source_index(root)
             self.assertTrue(report.ok, report.errors)
 
+    def test_malformed_https_urls_fail(self) -> None:
+        invalid_urls = [
+            "https://",
+            "https://example.gov.cn:99999/a",
+            "https://exa mple.gov.cn/a",
+            "https://example.gov.cn/line\nbreak",
+        ]
+        for invalid_url in invalid_urls:
+            with self.subTest(url=invalid_url), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                source = {
+                    "id": "ext-source-001",
+                    "title": "官方公告",
+                    "type": "brief",
+                    "url": invalid_url,
+                    "publisher": "主管部门",
+                    "published_at": "2026-05-15",
+                    "public_status": "confirmed-public",
+                    "citation": "外部来源",
+                    "usage_note": "可引用",
+                    "risk_note": "无风险",
+                }
+                self.write_json(root, "sources/public-sources.json", {"version": 1, "sources": [source]})
+
+                report = validate_source_index(root)
+
+                self.assertFalse(report.ok)
+                self.assertIn("url must be a valid https URL with a hostname", "\n".join(report.errors))
+
     def test_non_string_enum_fields_report_errors_without_crashing(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
