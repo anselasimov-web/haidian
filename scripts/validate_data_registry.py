@@ -142,9 +142,12 @@ def validate_local_path(report: RegistryReport, repo_root: Path, source_id: str,
         return
     resolved = (repo_root / path).resolve()
     try:
-        resolved.relative_to(repo_root.resolve())
+        resolved_relative = resolved.relative_to(repo_root.resolve())
     except ValueError:
         report.error(f"{source_id}: local path escapes repo: {value}")
+        return
+    if resolved_relative.parts and resolved_relative.parts[0] == "submissions":
+        report.error(f"{source_id}: data registry must not reference submitted proposal files: {value}")
         return
     if not resolved.exists():
         report.error(f"{source_id}: local path does not exist: {value}")
