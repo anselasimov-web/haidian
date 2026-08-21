@@ -57,6 +57,7 @@ from typing import Any
 SOURCE_ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]{2,63}$")
 ALLOWED_TYPES = {"brief", "boundary", "policy", "map", "culture", "industry", "news", "other"}
 ALLOWED_PUBLIC_STATUSES = {"confirmed-public", "public-draft", "external-public"}
+ALLOWED_INDEX_FIELDS = {"version", "sources"}
 REQUIRED_FIELDS = [
     "id",
     "title",
@@ -188,6 +189,10 @@ def validate_source_index(repo_root: Path, index_path: Path | None = None) -> So
     if not isinstance(index_data, dict):
         report.add_error(f"{report.index_path}: source index must be a JSON object")
         return report
+
+    for field_name in index_data:
+        if field_name not in ALLOWED_INDEX_FIELDS:
+            report.add_error(f"{report.index_path}: unsupported field `{field_name}`")
 
     if index_data.get("version") != 1:
         report.add_error(f"{report.index_path}: version must be 1")
