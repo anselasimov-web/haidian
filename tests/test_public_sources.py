@@ -136,6 +136,38 @@ class PublicSourcesTests(unittest.TestCase):
             report = validate_source_index(root)
             self.assertTrue(report.ok, report.errors)
 
+    def test_custom_index_outside_repo_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp)
+            root = workspace / "repo"
+            root.mkdir()
+            outside_index = workspace / "outside.json"
+            outside_index.write_text(json.dumps(VALID_INDEX), encoding="utf-8")
+
+            report = validate_source_index(root, outside_index)
+
+            self.assertFalse(report.ok)
+            self.assertIn("source index must stay inside the repository", "\n".join(report.errors))
+
+    def test_symlinked_index_cannot_escape_repo(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp)
+            root = workspace / "repo"
+            outside_index = workspace / "outside.json"
+            root.mkdir()
+            outside_index.write_text(json.dumps(VALID_INDEX), encoding="utf-8")
+            index_path = root / "sources" / "public-sources.json"
+            index_path.parent.mkdir()
+            try:
+                index_path.symlink_to(outside_index)
+            except OSError as exc:
+                self.skipTest(f"symlinks unavailable: {exc}")
+
+            report = validate_source_index(root)
+
+            self.assertFalse(report.ok)
+            self.assertIn("source index escapes repository", "\n".join(report.errors))
+
     def test_non_string_enum_fields_report_errors_without_crashing(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
