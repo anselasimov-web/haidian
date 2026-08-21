@@ -171,10 +171,28 @@ def validate_source_index(repo_root: Path, index_path: Path | None = None) -> So
     if not index_path.is_absolute():
         index_path = repo_root / index_path
 
-    report = SourceValidationReport(index_path=str(index_path.relative_to(repo_root)))
-    if not index_path.exists():
+    try:
+        display_path = index_path.relative_to(repo_root)
+    except ValueError:
+        report = SourceValidationReport(index_path=str(index_path))
+        report.add_error("source index must stay inside the repository")
+        return report
+
+    report = SourceValidationReport(index_path=display_path.as_posix())
+    try:
+        resolved_index = index_path.resolve(strict=True)
+    except FileNotFoundError:
         report.add_error(f"{report.index_path}: source index is missing")
         return report
+    except (OSError, RuntimeError):
+        report.add_error(f"{report.index_path}: source index could not be resolved")
+        return report
+
+    if not resolved_index.is_relative_to(repo_root):
+        report.add_error(f"{report.index_path}: source index escapes repository")
+        return report
+
+    index_path = resolved_index
 
     try:
         index_data = json.loads(index_path.read_text(encoding="utf-8"))
