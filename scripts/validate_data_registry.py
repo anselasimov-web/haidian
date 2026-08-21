@@ -217,8 +217,6 @@ def validate_source(report: RegistryReport, repo_root: Path, source: dict[str, A
         validate_local_path(report, repo_root, source_id, url)
 
     local_paths = source.get("local_paths", [])
-    if local_paths is None:
-        local_paths = []
     if not isinstance(local_paths, list):
         report.error(f"{source_id}: local_paths must be an array")
     else:
