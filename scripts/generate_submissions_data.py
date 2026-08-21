@@ -527,6 +527,15 @@ def main() -> int:
             print(f"{out_path.relative_to(repo_root)} is out of date; run scripts/generate_submissions_data.py", file=sys.stderr)
             return 1
         return 0
+    publication_path = repo_root / PUBLICATION_FILE
+    resolved_out = out_path.resolve()
+    aliases_publication = resolved_out == publication_path.resolve() or (
+        out_path.exists()
+        and publication_path.exists()
+        and out_path.samefile(publication_path)
+    )
+    if aliases_publication:
+        parser.error(f"output must not overwrite gallery publication input: {resolved_out}")
     out_path.write_text(generated, encoding="utf-8")
     print(out_path.relative_to(repo_root))
     return 0
