@@ -23,7 +23,7 @@ Validation rules
   required; both may be present.
 - ``path`` values must be relative, must not contain ``..``, and must point to
   an existing file in the repository.
-- ``url`` values must start with ``https://``.
+- ``url`` values must use a valid ``https://`` URL with a hostname.
 - No unrecognized additional fields are allowed.
 
 Usage
@@ -49,6 +49,7 @@ import argparse
 import json
 import re
 import sys
+import urllib.parse
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 from typing import Any
@@ -105,6 +106,18 @@ def normalize_local_path(raw_path: str) -> str:
     return path.as_posix()
 
 
+def is_https_url(value: str) -> bool:
+    if any(char.isspace() or ord(char) < 32 for char in value):
+        return False
+    try:
+        parsed = urllib.parse.urlsplit(value)
+        hostname = parsed.hostname
+        _ = parsed.port
+    except ValueError:
+        return False
+    return parsed.scheme == "https" and bool(hostname)
+
+
 def validate_source_item(
     report: SourceValidationReport,
     repo_root: Path,
@@ -157,8 +170,8 @@ def validate_source_item(
                     report.add_error(f"{prefix}: referenced path is missing: {local_path}")
 
     if url_value is not None:
-        if not isinstance(url_value, str) or not url_value.startswith("https://"):
-            report.add_error(f"{prefix}: url must start with https://")
+        if not isinstance(url_value, str) or not is_https_url(url_value):
+            report.add_error(f"{prefix}: url must be a valid https URL with a hostname")
 
     for optional_key in source:
         if optional_key not in {*REQUIRED_FIELDS, "path", "url"}:
