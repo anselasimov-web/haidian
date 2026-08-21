@@ -52,6 +52,20 @@ class PublicSourcesTests(unittest.TestCase):
             self.assertTrue(report.ok, report.errors)
             self.assertEqual(report.source_count, 1)
 
+    def test_unknown_top_level_field_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "brief").mkdir()
+            (root / "brief" / "public-brief.md").write_text("# brief", encoding="utf-8")
+            bad_index = copy.deepcopy(VALID_INDEX)
+            bad_index["generated_by"] = "stale-tool"
+            self.write_json(root, "sources/public-sources.json", bad_index)
+
+            report = validate_source_index(root)
+
+            self.assertFalse(report.ok)
+            self.assertIn("unsupported field `generated_by`", "\n".join(report.errors))
+
     def test_missing_referenced_path_fails(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
