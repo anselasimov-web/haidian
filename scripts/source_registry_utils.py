@@ -78,7 +78,7 @@ def _compact_source(source: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def summarize_source_registry(registry: dict[str,Any], limit: int = 8) -> dict[str, Any]:
+def summarize_source_registry(registry: dict[str, Any], limit: int = 8) -> dict[str, Any]:
     """Return a compact summary of the registry with per-tier source lists.
 
     Args:
