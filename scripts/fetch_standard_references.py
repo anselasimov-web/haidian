@@ -29,8 +29,8 @@ Fetch all standards from the default path::
 
 Use a custom standards file::
 
-    python3 scripts/fetch_standard_references.py \\
-        --standards path/to/standards.json \\
+    python3 scripts/fetch_standard_references.py \
+        --standards path/to/standards.json \
         --output-dir path/to/references
 
 Exit code is 0 when at least one standard was successfully fetched and 1 when
@@ -238,10 +238,16 @@ def read_reference_frontmatter(path: Path) -> dict[str, Any]:
     return fields
 
 
-def should_preserve_existing_reference(output_path: Path, result: FetchResult) -> bool:
+def should_preserve_existing_reference(
+    output_path: Path,
+    result: FetchResult,
+    source_url: Any,
+) -> bool:
     if result.ok:
         return False
     existing = read_reference_frontmatter(output_path)
+    if existing.get("source_url") != source_url:
+        return False
     return existing.get("fetch_status") in {
         "fetched_via_official_pdf_text",
         "fetched_manual_official",
@@ -279,7 +285,7 @@ def main() -> int:
         rel_path = f"{args.output_dir}/{slugify(str(standard_id))}.md"
         output_path = repo_root / rel_path
         existing_meta: dict[str, Any] = {}
-        if should_preserve_existing_reference(output_path, result):
+        if should_preserve_existing_reference(output_path, result, source_url):
             existing_meta = read_reference_frontmatter(output_path)
         else:
             if (
