@@ -10,6 +10,8 @@ Validation rules
 ----------------
 - ``schema_version`` must be ``"0.1.0"``.
 - ``updated_date`` must be ``YYYY-MM-DD`` format.
+- Registry and source objects must not contain fields outside the published
+  ``data/source_registry.schema.json`` contract.
 - Every source entry must have a unique ``source_id`` matching
   ``^[A-Z0-9][A-Z0-9_-]+$``.
 - Required fields per entry: ``title``, ``publisher``, ``source_kind``,
@@ -91,6 +93,28 @@ VALID_ACCESS_STATUSES = {
 }
 VALID_REVIEW_STATUSES = {"approved", "provisional", "needs_review", "rejected"}
 VALID_FORMAL_USE = {"yes", "background_only", "provisional_only", "no"}
+TOP_LEVEL_FIELDS = {"schema_version", "updated_date", "sources"}
+SOURCE_FIELDS = {
+    "source_id",
+    "title",
+    "publisher",
+    "source_kind",
+    "url",
+    "published_date",
+    "accessed_date",
+    "file_type",
+    "authority_level",
+    "timeliness_level",
+    "public_access_status",
+    "license_summary",
+    "review_status",
+    "usable_for_formal",
+    "allowed_uses",
+    "prohibited_uses",
+    "topics",
+    "local_paths",
+    "notes_zh",
+}
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 ID_RE = re.compile(r"^[A-Z0-9][A-Z0-9_-]+$")
 
@@ -158,6 +182,9 @@ def validate_source(report: RegistryReport, repo_root: Path, source: dict[str, A
     if source_id in seen:
         report.error(f"{source_id}: duplicate source_id")
     seen.add(source_id)
+
+    for key in sorted(set(source) - SOURCE_FIELDS):
+        report.error(f"{source_id}: unsupported field {key!r}")
 
     required = [
         "title",
@@ -241,6 +268,8 @@ def validate_registry(repo_root: Path, registry_path: Path) -> RegistryReport:
     data = load_json(registry_path, report)
     if not isinstance(data, dict):
         return report
+    for key in sorted(set(data) - TOP_LEVEL_FIELDS):
+        report.error(f"registry: unsupported field {key!r}")
     if data.get("schema_version") != "0.1.0":
         report.error("registry schema_version must be 0.1.0")
     updated_date = data.get("updated_date")
