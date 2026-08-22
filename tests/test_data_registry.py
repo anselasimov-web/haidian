@@ -98,6 +98,20 @@ class DataRegistryTests(unittest.TestCase):
             self.assertIn("page chrome", source["license_summary"])
             self.assertIn("third-party editorial content", source["license_summary"])
 
+    def test_local_paths_must_be_an_array(self) -> None:
+        base_registry = json.loads((REPO_ROOT / "data" / "source_registry.json").read_text(encoding="utf-8"))
+        source_id = base_registry["sources"][0]["source_id"]
+        for invalid_local_paths in ["data/example.json", {"path": "data/example.json"}, 7, None]:
+            with self.subTest(local_paths=invalid_local_paths), tempfile.TemporaryDirectory() as tmp:
+                registry = json.loads(json.dumps(base_registry))
+                registry["sources"][0]["local_paths"] = invalid_local_paths
+                path = Path(tmp) / "registry.json"
+                path.write_text(json.dumps(registry), encoding="utf-8")
+                completed = run_registry_validator(path)
+                self.assertNotEqual(completed.returncode, 0, completed.stdout + completed.stderr)
+                report = json.loads(completed.stdout)
+                self.assertIn(f"{source_id}: local_paths must be an array", report["errors"])
+
     def test_invalid_registry_fails_for_duplicate_and_restricted_approved_source(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
