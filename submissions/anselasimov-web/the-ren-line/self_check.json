@@ -10,7 +10,6 @@
       "ok": true,
       "errors": [],
       "warnings": [
-        "submissions/anselasimov-web/the-ren-line/manifest.json: known_blockers present; submission may pass intake but cannot enter formal professional scoring until resolved",
         "submissions/anselasimov-web/the-ren-line/geometry/site_boundary.geojson: uses provisional boundary; do not treat it as an official redline or precise-area basis. Organizer data gaps do not block content scoring; recalculate when official geometry is supplied"
       ],
       "proposal_files": [
@@ -105,7 +104,7 @@
       "ai_package_stages": {
         "submissions/anselasimov-web/the-ren-line": "formal"
       },
-      "total_bytes": 39109975,
+      "total_bytes": 39122798,
       "maintainer_bypass": false
     },
     "stderr": ""
@@ -247,9 +246,7 @@
   "can_enter_formal_review": true,
   "package_type": "professional_design_package",
   "review_status": "formal-review-ready",
-  "next_actions": [
-    "Resolve formal-readiness warning: submissions/anselasimov-web/the-ren-line/manifest.json: known_blockers present; submission may pass intake but cannot enter formal professional scoring until resolved"
-  ],
+  "next_actions": [],
   "schema_version": "0.1.0",
   "checks": [
     {
