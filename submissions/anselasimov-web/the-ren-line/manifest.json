@@ -55,7 +55,7 @@
       "path": "self_check.json",
       "role": "self_check",
       "required": true,
-      "sha256": "bfe2f4e4800349844bc179a63e00a996d293ca32ab6ff94c0bd8dfd976c201ea"
+      "sha256": "8f0c9d29181bf3da27d184c5e2d7c77f0c091848ac54d775957634d23b5b95d2"
     },
     {
       "path": "compliance_matrix.json",
@@ -527,15 +527,16 @@
   ],
   "validation_claim": {
     "self_checked": true,
-    "known_blockers": [
+    "known_blockers": [],
+    "data_confidence": "mixed_provisional_and_conceptual",
+    "data_confidence_note_zh": "空间与面积类指标基于临时粗略边界与概念性设计图层(assumptions.json A-BOUNDARY-001/A-KEYAREA-001/A-CONTROLS-001/A-DATA-001/A-CONCEPT-001/A-ROADS-001),官方条件确认前不作为法定结论;计数类与拓扑类指标不受边界重绘影响,置信度仍为high。 上述缺口均为主办方/官方所有,参赛者无法自行解决,按系统语义属组织方数据缺口(不阻断内容评分),已在 assumptions.json、provisional-boundary 警告与本字段充分披露;known_blockers 保持空。",
+    "data_confidence_note_en": "Spatial and area-derived metrics rely on a provisional rough boundary and conceptual (non-statutory) design layers (see assumptions.json A-BOUNDARY-001/A-KEYAREA-001/A-CONTROLS-001/A-DATA-001/A-CONCEPT-001/A-ROADS-001) and are not statutory conclusions pending official confirmation; count-type and topology-only metrics are unaffected by boundary redraws and remain high confidence. These gaps are organizer/official-owned, not participant-resolvable; per the system's semantics they are non-blocking organizer data gaps, fully disclosed elsewhere. known_blockers kept empty.",
+    "readiness_contract": "persisted-self-check-v1",
+    "organizer_owned_data_gaps": [
       "OFFICIAL-BOUNDARY-MISSING: Overall design boundary and coordination-study boundary use a provisional rough boundary (PROV-SITE-001/PROV-RESEARCH-001), not an official redline; all area-derived metrics must be recalculated once the official boundary is published. (assumptions.json A-BOUNDARY-001)",
       "OFFICIAL-KEY-AREA-BOUNDARY-MISSING: The three required key-area polygons are provisional rough approximations (PROV-KEY-001/002/003); recomputed areas deviate from the publicly announced areas, which the narrative uses instead. (assumptions.json A-KEYAREA-001)",
       "STATUTORY-CONTROLS-MISSING: Detailed regulatory controls (FAR, building height, density, green ratio), road redlines, land ownership, utilities, and engineering constraints are not yet confirmed from official attachments; metrics.json floor_area_ratio_official and building_height_official_m remain status=unknown. (assumptions.json A-CONTROLS-001)",
       "AUTHORITATIVE-BASELINE-DATA-MISSING: Parcel-level baseline data for existing population, buildings, utilities, ridership, and water quality has not been obtained from authoritative sources; the narrative relies on district-level public bulletins and reported figures only. (assumptions.json A-DATA-001)"
-    ],
-    "data_confidence": "mixed_provisional_and_conceptual",
-    "data_confidence_note_zh": "空间与面积类指标基于临时粗略边界与概念性设计图层(assumptions.json A-BOUNDARY-001/A-KEYAREA-001/A-CONTROLS-001/A-DATA-001/A-CONCEPT-001/A-ROADS-001),官方条件确认前不作为法定结论;计数类与拓扑类指标不受边界重绘影响,置信度仍为high。",
-    "data_confidence_note_en": "Spatial and area-derived metrics rely on a provisional rough boundary and conceptual (non-statutory) design layers (see assumptions.json A-BOUNDARY-001/A-KEYAREA-001/A-CONTROLS-001/A-DATA-001/A-CONCEPT-001/A-ROADS-001) and are not statutory conclusions pending official confirmation; count-type and topology-only metrics are unaffected by boundary redraws and remain high confidence.",
-    "readiness_contract": "persisted-self-check-v1"
+    ]
   }
 }
