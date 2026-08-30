@@ -55,25 +55,25 @@
       "path": "self_check.json",
       "role": "self_check",
       "required": true,
-      "sha256": "8f0c9d29181bf3da27d184c5e2d7c77f0c091848ac54d775957634d23b5b95d2"
+      "sha256": "2d38c9e04001eb13df4b710b40925d071b2a482940d918621958fbae890af13f"
     },
     {
       "path": "compliance_matrix.json",
       "role": "compliance_matrix",
       "required": true,
-      "sha256": "98abb720056791b7c3947d8902057d50e6100eed959e21d58d0127c6bc5c11db"
+      "sha256": "cad23756665e16859f4042b43097a67df730759c6481d09a7c56508159cc3625"
     },
     {
       "path": "standard_matrix.json",
       "role": "standard_matrix",
       "required": true,
-      "sha256": "78dea4233ad69f4fbc5d1dc9efb6cc8271c8ddbadc7fb3f6e10bc6618d8baa0a"
+      "sha256": "ef24b449cf58b8dfa19a683955e993e3118e77dd0706ab72ca114b981a49a593"
     },
     {
       "path": "design_depth_matrix.json",
       "role": "design_depth_matrix",
       "required": true,
-      "sha256": "0aad0ed5e17e181eae3fd8df6e1d11dd76f5a5274386679aa4f9376d7e91b890"
+      "sha256": "8ab8c72b154cd84b0e8f0bad8c6ee422ce921bdde4865132f63c6aab795411a3"
     },
     {
       "path": "report/proposal.html",
